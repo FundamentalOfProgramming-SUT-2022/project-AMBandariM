@@ -107,15 +107,41 @@ void insertstr(char *file_name, int line_no, int pos_in_line)
 	replace(file_name);
 }
 
+void cat(char *file_name, int mode)
+{
+	FILE *input_file = fopen(file_name, "r");
+	FILE *output_file;
+	if(mode == 1){
+		output_file = fopen(".ara/str", "w");
+	}
+	else{
+		output_file = stdout;
+	}
+	char one_line[1000];
+	while(fgets(one_line, 1000, input_file) != NULL){
+		fprintf(output_file, "%s", one_line);
+	}
+	if(mode == 0){
+		printf("\n");
+	}
+	fclose(input_file);
+	fclose(output_file);
+}
+
 
 int main(){
 	char COMMAND_LINE[1000];
 	char command_word[50];
 	char *command_line;
+	fgets(COMMAND_LINE, 1000, stdin);
+	command_line = (char *)&COMMAND_LINE;
 	while(1){
-		fgets(COMMAND_LINE, 1000, stdin);
-		command_line = (char *)&COMMAND_LINE;
-		sscanf(command_line, "%50s", command_word);
+		if(-1 == sscanf(command_line, "%50s", command_word)){
+			fgets(COMMAND_LINE, 1000, stdin);
+			command_line = (char *)&COMMAND_LINE;
+			sscanf(command_line, "%50s", command_word);
+		}
+		
 		command_line += strlen(command_word) + 1;
 		if(!strcmp(command_word,"exit") || !strcmp(command_word,"x"))
 		{
@@ -124,9 +150,10 @@ int main(){
 		else if(!strcmp(command_word,"createfile"))
 		{
 			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
 			if(!strcmp(command_word,"--file")){
-				command_line += strlen(command_word) + 1;
 				corr_read(command_line);
+				command_line += the_length + 1;
 				FILE *file = fopen(corr_read_out, "r");
 				if(file != NULL){
 					fclose(file);
@@ -144,8 +171,8 @@ int main(){
 		else if(!strcmp(command_word,"insertstr"))
 		{
 			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
 			if(!strcmp(command_word,"--file")){
-				command_line += strlen(command_word) + 1;
 				char dir[1000]; int line, position;
 				corr_read(command_line);
 				strcpy(dir, corr_read_out);
@@ -164,6 +191,9 @@ int main(){
 				if(!strcmp(command_word,"--pos")){
 					command_line += strlen(command_word) + 1;
 					sscanf(command_line, "%d:%d", &line, &position);
+					char somestringhere[100];
+					sprintf(somestringhere, "%d:%d", line, position);
+					command_line += strlen(somestringhere) + 1;
 					insertstr(dir,line,position);
 				}
 				else{
@@ -175,11 +205,33 @@ int main(){
 				printf("%s\n", "put address after --file");
 			}
 		}
-		// else if(!strcmp(command_word,"cat"))
-		// {
+		else if(!strcmp(command_word,"cat"))
+		{
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			if(!strcmp(command_word,"--file")){
+				char dir[1000];
+				corr_read(command_line);
+				strcpy(dir, corr_read_out);
+				command_line += the_length + 1;
+				sscanf(command_line, "%50s", command_word);
+				if(!strcmp(command_word,"=D")){
+					command_line += strlen(command_word) + 1;
+					cat(dir,1);
+				}
+				else{
+					cat(dir,0);
+				}
 
-		// }
-		else printf("%s\n", "Invalid command");
+			}
+			else{
+				printf("%s\n", "put address after --file");
+			}
+		}
+		else{
+			printf("%s\n", "Invalid command");
+			break;
+		}
 
 	}
 	return 0;
