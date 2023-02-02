@@ -105,6 +105,7 @@ void corr_read(char *address)
 			else{
 				corr_read_out[dirptr] = *address;
 				dirptr++;
+				slash = 0;
 			}
 			address++;
 			the_length++;
@@ -145,8 +146,10 @@ void incorr_read(char *address)
 				fprintf(str_file,"%c",'"');
 				slash = 0;
 			}
-			else
+			else{
 				fprintf(str_file,"%c",*ch);
+				slash = 0;
+			}
 			//the_length = strlen(corr_read_out);
 		}
 		the_length++;
@@ -186,6 +189,7 @@ void incorr_read(char *address)
 			}
 			else{
 				fprintf(str_file,"%c",*address);
+				slash = 0;
 			}
 			address++;
 			the_length++;
@@ -204,9 +208,9 @@ void insertstr(char *file_name, int line_no, int pos_in_line)
 	for(int i = 1; i < line_no && fgets(one_line,1000,file) != NULL; i++){
 		fprintf(place,"%s",one_line);
 	}
-	char one_char;
-	for(int i = 0; i < pos_in_line && fgets(&one_char,1,file) != NULL; i++){
-		fprintf(place, "%c", one_char);
+	char one_char[2];
+	for(int i = 0; i < pos_in_line && fgets(one_char,2,file) != NULL; i++){
+		fprintf(place, "%c", *one_char);
 	}
 	while(fgets(one_line,1000,str_file) != NULL){
 		fprintf(place,"%s",one_line);
@@ -216,6 +220,24 @@ void insertstr(char *file_name, int line_no, int pos_in_line)
 	}
 	fclose(file);
 	fclose(str_file);
+	fclose(place);
+	replace(file_name);
+}
+
+void insertstr_with_char(char *file_name, int pos, char *text)
+{
+	FILE *file = fopen(file_name, "r");
+	FILE *place = fopen(".ara/place", "w");
+	char one_line[1000];
+	char one_char[2];
+	for(int i = 0; i < pos && fgets(one_char,2,file) != NULL; i++){
+		fprintf(place, "%c", *one_char);
+	}
+	fprintf(place,"%s",text);
+	while(fgets(one_line,1000,file) != NULL){
+		fprintf(place,"%s",one_line);
+	}
+	fclose(file);
 	fclose(place);
 	replace(file_name);
 }
@@ -234,10 +256,7 @@ void cat(char *file_name, int mode)
 	while(fgets(one_line, 1000, input_file) != NULL){
 		fprintf(output_file, "%s", one_line);
 	}
-	if(mode == 0){
-		printf("\n");
-	}
-	else{
+	if(mode == 1){
 		fclose(output_file);
 	}
 	fclose(input_file);
@@ -268,7 +287,7 @@ void removestr(char *file_name, int line_no, int pos_in_line, int rm_size, char 
 		for(int i = 1; i < line_no && fgets(one_line,1000,file) != NULL; i++){
 			int x = 0;
 		}
-		fgets(one_line,pos_in_line+ + 1,file);
+		fgets(one_line,pos_in_line + 1,file);
 		long long where_we_are = ftell(file);
 		fseek(file, 0, SEEK_SET);
 		for(int i = 0; (i < (where_we_are - rm_size)) && pos_in_line && fgets(one_char,2,file) != NULL; i++){
@@ -279,6 +298,25 @@ void removestr(char *file_name, int line_no, int pos_in_line, int rm_size, char 
 			fprintf(place,"%c",*one_char);
 		}
 	}
+	fclose(file);
+	fclose(place);
+	replace(file_name);
+}
+
+void removestr_with_char(char *file_name, int pos, int rm_size)
+{
+	FILE *file = fopen(file_name, "r");
+	FILE *place = fopen(".ara/place", "w");
+	char one_line[1000], one_char[2];
+
+	for(int i = 0; i < pos && fgets(one_char,2,file) != NULL; i++){
+		fprintf(place,"%c",*one_char);
+	}
+	fseek(file, rm_size, SEEK_CUR);
+	while(fgets(one_line,1000,file) != NULL){
+		fprintf(place,"%s",one_line);
+	}
+
 	fclose(file);
 	fclose(place);
 	replace(file_name);
@@ -520,8 +558,79 @@ void findstr(char *file_name, enum FinderType atr, int at_num, int byword, int a
 	// 	printf("the %dth is %d with length %d in %dth word\n",i,char_id[i],lenght_of_word[i],word_id[i]);
 	// }
 	// return;
-	
-	cat(".ara/place", arman);
+	if(arman < 2) cat(".ara/place", arman);
+}
+
+void replacestr(char *filename, char *str2, enum FinderType atr, int at_num)
+{
+	backup(filename);
+	findstr(filename, at_num, at_num, 0, 1);
+	FILE *str_file = fopen(".ara/str", "r");
+	fseek(str_file, 0, SEEK_END); int MAXsTRfILE = ftell(str_file); fseek(str_file, 0, SEEK_SET);
+	fclose(str_file);
+	if(atr == ATR_AT){
+		removestr_with_char(filename, char_id[at_num-1], lenght_of_word[at_num-1]);
+		insertstr_with_char(filename, char_id[at_num-1], str2);
+	}
+	else{
+		int li = 0, change = 0;
+		for(int i = 0; i < counter_of_find; i++){
+			if(i > 0) if(char_id[i] < char_id[li]+lenght_of_word[li]) continue;
+			removestr_with_char(filename, char_id[i] + change, lenght_of_word[i]);
+			insertstr_with_char(filename, char_id[i] + change, str2);
+			change += strlen(str2) - lenght_of_word[i];
+			li = i;
+		}
+	}
+	return;
+}
+
+void grep(char (*files)[1000], int n, int cMode, int lMode, int arman)
+{
+	FILE *place = fopen(".ara/place2", "w");
+	int count = 0;
+	for(int i = 0; i < n; i++){
+		//printf("str file should be 'amir', check it");getchar();
+		int last_start = -1, line_start = 0, ix = 0, fix = 0;
+		findstr(files[i], ATR_ALL, 1, 0, 2);
+		FILE *file = fopen(files[i],"r");
+		char ch[2];
+		while(fgets(ch,2,file) != NULL){
+			if(fix >= counter_of_find) break;
+			if(*ch == '\n') {line_start = ix+1;}
+			if(char_id[fix] == ix && last_start != line_start){
+				fix++;
+				if(lMode){
+					if(cMode){
+						count++;
+					}
+					else{
+						fprintf(place, "%s\n", files[i]);
+					}
+					break;
+				}
+				else{
+					if(cMode){
+						count++;
+					}
+					else{
+						fprintf(place, "%s: ", files[i]);
+						char a_line[10000];
+						fseek(file, line_start, SEEK_SET);
+						fgets(a_line, 10000, file);
+						fprintf(place, "%s", a_line);
+						fseek(file, ix, SEEK_SET);
+					}
+				}
+			}
+			ix++;
+		}
+		fclose(file);
+	}
+	if(cMode) fprintf(place, "%d\n",count);
+	fclose(place);
+	//printf("str file should be 'amir', check it");getchar();
+	cat(".ara/place2", arman);
 }
 
 int main(){
@@ -831,7 +940,7 @@ int main(){
 				char dir[1000]; int atr_count = 0, atr_at = 0, at_num = 1, atr_byword = 0, atr_all = 0, arman = 0;
 				corr_read(command_line);
 				strcpy(dir, corr_read_out);
-				command_line += strlen(dir); if(*command_line == ' ') command_line++;
+				command_line += the_length + 1; if(*command_line == ' ') command_line++;
 				while(1){
 					int theOut = sscanf(command_line, "%50s", command_word);
 					if(theOut == -1) break;
@@ -871,6 +980,131 @@ int main(){
 				printf("%s\n", "put address after --file");
 				*command_line = '\0';
 			}
+		}
+		else if(!strcmp(command_word,"replace")) //function name is "replacestr"
+		{
+			while(*command_line == ' ') command_line++;
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			while(*command_line == ' ') command_line++;
+			if(!strcmp(command_word,"--str1")){
+				incorr_read(command_line);
+				command_line += the_length;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			if(!strcmp(command_word,"--str2")){
+				char str2[1000];
+				corr_read(command_line);
+				strcpy(str2, corr_read_out);
+				command_line += the_length + 1;
+
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+
+				if(!strcmp(command_word, "--file")){
+					char dir[1000]; int atr_at = 0, at_num = 1, atr_all = 0;
+					corr_read(command_line);
+					strcpy(dir, corr_read_out);
+					command_line += the_length + 1; if(*command_line == ' ') command_line++;
+					while(1){
+						int theOut = sscanf(command_line, "%50s", command_word);
+						if(theOut == -1) break;
+						command_line += strlen(command_word); if(*command_line == ' ') command_line++;
+						if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
+							atr_at = 1;
+							sscanf(command_word,"-at%d",&at_num);
+							if(*command_line == ' ') command_line++;
+						}
+
+						else if(!strcmp(command_word,"-all")){
+							atr_all = 1;
+						}
+						else break;
+					}
+					if(atr_all + atr_at > 1){
+						printf("you can use at most one of -at or -all\n");
+						*command_line = '\0';
+					}
+					else{
+						enum FinderType findertype = ATR_AT;
+						if(atr_all) findertype = ATR_ALL;
+						replacestr(dir, str2, findertype, at_num);
+					}
+				}
+				else{
+					printf("%s\n", "put address after --file");
+					*command_line = '\0';
+				}
+				
+			}
+			else{
+				printf("%s\n", "please put an string after str2\n");
+				*command_line = '\0';
+			}
+		}
+		else if(!strcmp(command_word,"grep")) //function name is "replacestr"
+		{
+			while(*command_line == ' ') command_line++;
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			while(*command_line == ' ') command_line++;
+			int cOption = 0, lOption = 0;
+			if(!strcmp(command_word,"-l")){
+				lOption = 1;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			if(!strcmp(command_word,"-c")){
+				cOption = 1;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			if(!strcmp(command_word,"-l")){
+				lOption = 1;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			if(!strcmp(command_word,"--str")){
+				incorr_read(command_line);
+				command_line += the_length;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			if(!strcmp(command_word,"--files")){
+				char dir[50][1000]; int file_counter = 0, arman = 0;
+				while(*command_line != '\n' && *command_line != '\0'){
+					corr_read(command_line);
+					command_line += the_length + 1; while(*command_line == ' ') command_line++;
+					if(!strcmp(corr_read_out,"=D")){
+						arman = 1;
+						break;
+					}
+					else{
+						strcpy(dir[file_counter], corr_read_out);
+						file_counter++;
+					}
+				}
+				grep(dir, file_counter, cOption, lOption, arman);
+			}
+			else{
+				printf("%s\n", "put address after --files");
+				*command_line = '\0';
+			}
+
+			
 		}
 		else{
 			printf("%s : %s\n", "Invalid command", command_word);
