@@ -1,11 +1,42 @@
-// ~ Be Name Khoda ~
-// <Doctor Bandari>
-// Powered by .LOVE
+//      ~ In the name of GOD ~
+//       <- Doctor Bandari ->
+//          HARD MODE : ON
 
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
 #include<malloc.h>
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+
+
+void createfile(char *address)
+{
+	char scope[100];
+	int i = 0;
+	while(1){
+		if(address[i] == '\0'){
+			FILE *file = fopen(address, "r");
+			if(file != NULL){
+				fclose(file);
+				printf("%s exists\n", address);
+			}
+			else{
+				FILE *file = fopen(address, "w");
+				fclose(file);
+			}
+			return;
+		}
+		else if(address[i] == '/'){
+			struct stat st = {0};
+			if(stat(scope, &st) == -1){
+				mkdir(scope, 0700);
+			}
+		}
+		scope[i] = address[i]; scope[i+1] = '\0'; i++;
+	}
+}
 
 void backup(char *file_name)
 {
@@ -81,6 +112,88 @@ void corr_read(char *address)
 	}
 }
 
+void incorr_read(char *address)
+{
+	the_length = 0;
+	FILE *str_file = fopen(".ara/str", "w");
+	while(*address == ' '){address++; the_length++;}
+	if(address[0] != '"'){
+		char ch[2]; int slash = 0;
+		while(sscanf(address, "%c", ch) != -1){
+			if(*ch == ' ' || *ch == '\0' || *ch == EOF) break;
+			the_length++;
+			address++;
+			if(*ch == '\\' && !slash){
+				slash = 1;
+			}
+			else if((*ch == 'n') && slash){
+				fprintf(str_file,"%c",'\n');
+				slash = 0;
+			}
+			else if((*ch == '*') && slash){
+				fprintf(str_file,"%c",'*');
+				slash = 0;
+			}
+			else if(*ch == '*'){
+				fprintf(str_file,"%c",27);
+			}
+			else if((*ch == '\\') && slash){
+				fprintf(str_file,"%c",'\\');
+				slash = 0;
+			}
+			else if((*ch == '"') && slash){
+				fprintf(str_file,"%c",'"');
+				slash = 0;
+			}
+			else
+				fprintf(str_file,"%c",*ch);
+			//the_length = strlen(corr_read_out);
+		}
+		the_length++;
+	}
+	else{
+		address++;
+		the_length++;
+		int slash = 0;
+		int dirptr = 0;
+		while(1){
+			if(*address == '\\'){
+				if(slash){
+					fprintf(str_file,"%c",'\\');
+					slash = 0;
+				}
+				else slash = 1;
+			}
+			else if(*address == '"'){
+				if(slash){
+					fprintf(str_file,"%c",'"');
+					slash = 0;
+				}
+				else { the_length++; break;}
+			}
+			else if(*address == '*'){
+				if(slash){
+					fprintf(str_file,"%c",'*');
+					slash = 0;
+				}
+				else{
+					fprintf(str_file,"%c",(char)(27));
+				}
+			}
+			else if(*address == 'n' && slash){
+				fprintf(str_file,"%c",'\n');
+				slash = 0;
+			}
+			else{
+				fprintf(str_file,"%c",*address);
+			}
+			address++;
+			the_length++;
+		}
+	}
+	fclose(str_file);
+}
+
 void insertstr(char *file_name, int line_no, int pos_in_line)
 {
 	backup(file_name);
@@ -124,8 +237,10 @@ void cat(char *file_name, int mode)
 	if(mode == 0){
 		printf("\n");
 	}
+	else{
+		fclose(output_file);
+	}
 	fclose(input_file);
-	fclose(output_file);
 }
 
 void removestr(char *file_name, int line_no, int pos_in_line, int rm_size, char ward)
@@ -229,6 +344,186 @@ void pastestr(char *file_name, int line_no, int pos_in_line)
 	replace(file_name);
 }
 
+enum FinderType {ATR_COUNT, ATR_AT, ATR_ALL};
+int char_id[10000], word_id[10000], lenght_of_word[10000], counter_of_find;
+void findstr(char *file_name, enum FinderType atr, int at_num, int byword, int arman)
+{
+	counter_of_find = 0;
+	FILE *file = fopen(file_name, "r");
+	FILE *str_file = fopen(".ara/str", "r");
+	
+	char one_char[2]; int strPtr = 0, filePtr = 0, dynamicPtr = 0, filePtrByword = 0, lenghtInFile = 0, lastStarPtr = -1,lastStarStr, inStar = 0;
+	int there_is_star = 0;
+	while(fgets(one_char,2,str_file) != NULL){
+		if(*one_char == 27){
+			there_is_star = 1;
+			break;
+		}
+	}
+	fseek(str_file, 0, SEEK_END); int MAXsTRfILE = ftell(str_file); fseek(str_file, 0, SEEK_SET);
+	fseek(file, 0, SEEK_END); int MAXfILE = ftell(file);
+	for(filePtr = 0; filePtr < MAXfILE; filePtr++){
+		fseek(file, filePtr, SEEK_SET);
+		fseek(str_file, 0, SEEK_SET);
+		char fch[2], sch[2];
+		dynamicPtr = filePtr;
+		inStar = 0;
+		lenghtInFile = 0;
+		for(strPtr = 0; strPtr < MAXsTRfILE; strPtr++){
+			fgets(sch, 2, str_file);
+			if(*sch == 27){
+				inStar = 1;
+				lastStarPtr = dynamicPtr - 1;
+				lastStarStr = strPtr;
+			}
+			else{
+				fgets(fch, 2, file);
+				if(*sch == *fch){
+					dynamicPtr++;
+				}
+				else{
+					if(!inStar){
+						strPtr = MAXsTRfILE;
+						continue;
+					}
+					lastStarPtr++;
+					strPtr = lastStarStr;
+					dynamicPtr = lastStarPtr;
+					if(lastStarPtr >= MAXfILE){
+						strPtr = MAXsTRfILE;
+						continue;
+					}
+					fseek(str_file, strPtr + 1, SEEK_SET);
+					fseek(file, lastStarPtr, SEEK_SET);
+					fgets(fch, 2, file);
+					if(*fch == ' ' || *fch == '\0' || *fch == '\n' || *fch == EOF){
+						inStar = 0;
+					}
+					fseek(file,-1,SEEK_CUR);
+				}
+			}
+			if(strPtr == MAXsTRfILE - 1){
+				lenghtInFile = dynamicPtr - filePtr;
+				fseek(str_file, strPtr, SEEK_SET);
+				fgets(sch, 2, str_file);
+				if(*sch == 27){
+					while(fgets(fch,2,file) != NULL){
+						if(*fch == ' ' || *fch == '\0' || *fch == '\n' || *fch == EOF){
+							break;
+						}
+						//printf("w got%s\n",fch );
+						lenghtInFile++;
+					}
+					strPtr = MAXsTRfILE;
+					continue;
+
+				}
+				else{
+					if(!inStar){
+						strPtr = MAXsTRfILE;
+						continue;
+					}
+					lastStarPtr++;
+					strPtr = lastStarStr;
+					dynamicPtr = lastStarPtr;
+					fseek(str_file, strPtr + 1, SEEK_SET);
+					fseek(file, lastStarPtr, SEEK_SET);
+					if(lastStarPtr >= MAXfILE){
+						strPtr = MAXsTRfILE;
+						continue;
+					}
+					fgets(fch, 2, file);
+					if(*fch == ' ' || *fch == '\0' || *fch == '\n' || *fch == EOF){
+						strPtr = MAXsTRfILE;
+						continue;
+					}
+					fseek(file,-1,SEEK_CUR);
+				}
+			}
+		}
+		if(lenghtInFile > 0){
+			char_id[counter_of_find] = filePtr;
+			lenght_of_word[counter_of_find] = lenghtInFile;
+			counter_of_find++;
+			if(there_is_star){
+				filePtr += lenghtInFile-1;
+			}
+		}
+	}
+
+	fclose(str_file);
+	FILE *place = fopen(".ara/place", "w");
+	// make word_id
+	int word_counter = 0;
+	char last_char[2], the_char[2];
+	fseek(file, 0, SEEK_SET);
+	fgets(last_char, 2, file);
+	int index = 0;
+	if(char_id[0] == 0) index++;
+	for(int i = 1; i < MAXfILE; i++){
+		fseek(file,i,SEEK_SET);
+		fgets(the_char, 2, file);
+		if((*last_char==' '||*last_char=='\0'||*last_char=='\n'||*last_char==EOF)&&(*the_char!=' '&&*the_char!='\0'&&*the_char!='\n'&&*the_char!=EOF))
+		{
+			word_counter++;
+		}
+		if(char_id[index] == i){
+			word_id[index] = word_counter;
+			index++;
+		}
+		if(index >= counter_of_find) break;
+		*last_char = * the_char;
+	}
+	// make the output
+	if(atr == ATR_COUNT){
+		fprintf(place, "%d", counter_of_find);
+	}
+	else if(atr == ATR_AT){
+		if(at_num > counter_of_find){
+			fprintf(place, "-1");
+		}
+		else{
+			if(byword){
+				fprintf(place, "%d", word_id[at_num-1]);
+			}
+			else{
+				fprintf(place, "%d", char_id[at_num-1]);
+			}
+		}
+	}
+	else if(atr == ATR_ALL){
+		for(int i = 0; i < counter_of_find; i++){
+			if(byword){
+				if(i == 0){
+					fprintf(place, "%d", word_id[i]);
+				}
+				else{
+					if(word_id[i] != word_id[i-1]){
+						fprintf(place, ", %d", word_id[i]);
+					}
+				}
+			}
+			else{
+				if(i == 0){
+					fprintf(place, "%d", char_id[i]);
+				}
+				else{
+					fprintf(place, ", %d", char_id[i]);
+				}
+			}
+		}
+	}
+	fclose(file);
+	fclose(place);
+	
+	// for(int i = 0; i < counter_of_find; i++){
+	// 	printf("the %dth is %d with length %d in %dth word\n",i,char_id[i],lenght_of_word[i],word_id[i]);
+	// }
+	// return;
+	
+	cat(".ara/place", arman);
+}
+
 int main(){
 	char COMMAND_LINE[1000];
 	char command_word[50];
@@ -254,15 +549,9 @@ int main(){
 			if(!strcmp(command_word,"--file")){
 				corr_read(command_line);
 				command_line += the_length + 1;
-				FILE *file = fopen(corr_read_out, "r");
-				if(file != NULL){
-					fclose(file);
-					printf("%s exists\n", corr_read_out);
-				}
-				else{
-					FILE *file = fopen(corr_read_out, "w");
-					fclose(file);
-				}
+				char Address[1000];
+				strcpy(Address, corr_read_out);
+				createfile(Address);
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -523,11 +812,70 @@ int main(){
 				*command_line = '\0';
 			}
 		}
+		else if(!strcmp(command_word,"find"))
+		{
+			while(*command_line == ' ') command_line++;
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			while(*command_line == ' ') command_line++;
+			if(!strcmp(command_word,"--str")){
+				incorr_read(command_line);
+				command_line += the_length;
+				while(*command_line == ' ') command_line++;
+				sscanf(command_line, "%50s", command_word);
+				command_line += strlen(command_word) + 1;
+				while(*command_line == ' ') command_line++;
+			}
+			
+			if(!strcmp(command_word,"--file")){
+				char dir[1000]; int atr_count = 0, atr_at = 0, at_num = 1, atr_byword = 0, atr_all = 0, arman = 0;
+				corr_read(command_line);
+				strcpy(dir, corr_read_out);
+				command_line += strlen(dir); if(*command_line == ' ') command_line++;
+				while(1){
+					int theOut = sscanf(command_line, "%50s", command_word);
+					if(theOut == -1) break;
+					command_line += strlen(command_word); if(*command_line == ' ') command_line++;
+					if(!strcmp(command_word,"-count")){
+						atr_count = 1;
+					}
+					else if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
+						atr_at = 1;
+						sscanf(command_word,"-at%d",&at_num);
+						if(*command_line == ' ') command_line++;
+					}
+					else if(!strcmp(command_word,"-byword")){
+						atr_byword = 1;
+					}
+					else if(!strcmp(command_word,"-all")){
+						atr_all = 1;
+					}
+					else if(!strcmp(command_word,"=D")){
+						arman = 1;
+						break;
+					}
+					else break;
+				}
+				if(atr_all + atr_at + atr_count > 1){
+					printf("you can use at most one of -count , -at or -all\n");
+					*command_line = '\0';
+				}
+				else{
+					enum FinderType findertype = ATR_AT;
+					if(atr_count) findertype = ATR_COUNT;
+					else if(atr_all) findertype = ATR_ALL;
+					findstr(dir,findertype,at_num,atr_byword,arman);
+				}
+			}
+			else{
+				printf("%s\n", "put address after --file");
+				*command_line = '\0';
+			}
+		}
 		else{
-			printf("%s\n", "Invalid command");
+			printf("%s : %s\n", "Invalid command", command_word);
 			*command_line = '\0';
 		}
-
 	}
 	return 0;
 }
