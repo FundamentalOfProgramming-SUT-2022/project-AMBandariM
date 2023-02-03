@@ -633,6 +633,131 @@ void grep(char (*files)[1000], int n, int cMode, int lMode, int arman)
 	cat(".ara/place2", arman);
 }
 
+void file_to_file(char *file1, char *file2)
+{
+	FILE *from = fopen(file1, "r");
+	FILE *to = fopen(file2, "w");
+	char line[10000];
+	while(fgets(line,10000,from) != NULL){
+		fprintf(to, "%s", line);
+	}
+	fclose(from);
+	fclose(to);
+}
+
+void undo(char *file)
+{
+	char bakfile[200];
+	strcpy(bakfile, file);
+	strcat(bakfile, ".bk"); bakfile[0]='.'; bakfile[1]='a'; bakfile[2]='r'; bakfile[3]='a';
+	file_to_file(file, ".ara/place");
+	file_to_file(bakfile, file);
+	file_to_file(".ara/place", bakfile);
+}
+
+void auto_indent(char *file_name)
+{
+	backup(file_name);
+	FILE *file = fopen(file_name, "r");
+	FILE *place = fopen(".ara/place", "w");
+	char wtbuff[10000], ch[2]; wtbuff[0] = '\0';
+	int level = 0;
+
+	while(1){
+		if(fgets(ch, 2, file) == NULL) goto out;
+		if(*ch == ' ' || *ch == '\t'){
+			strcat(wtbuff, ch);
+		}
+		else if(*ch == '{'){
+			level++;
+			wtbuff[0] = '\0';
+			fprintf(place, "{");
+			/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+			while(*ch == '\n')
+				/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+			while(*ch == '}'){
+				level--;
+				fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t"); fprintf(place,"}");
+				/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+				while(*ch == '\n')
+					/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+			}
+			fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t");
+			fseek(file,-1,SEEK_CUR);
+		}
+		else if(*ch == '}'){
+			wtbuff[0] = '\0';
+			while(*ch == '}'){
+				level--;
+				fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t"); fprintf(place,"}");
+				/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+				while(*ch == '\n')
+					/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+			}
+			fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t");
+			fseek(file,-1,SEEK_CUR);
+		}
+		else if(*ch == '\n'){
+			wtbuff[0] = '\0';
+			/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
+			fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t");
+			fseek(file,-1,SEEK_CUR);
+		}
+		else{
+			fprintf(place, "%s%s", wtbuff, ch); wtbuff[0] = '\0';
+			/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break; strcat(wtbuff, ch);}
+			if(*ch == '{'){
+				fprintf(place, " ");
+				wtbuff[0] = '\0';
+			}
+			fseek(file,-1,SEEK_CUR);
+		}
+	}
+	out:
+	fclose(file);
+	fclose(place);
+	file_to_file(".ara/place", file_name);
+}
+
+void compare(char *file_1, char *file_2, int arman)
+{
+	FILE *file1 = fopen(file_1, "r");
+	FILE *file2 = fopen(file_2, "r");
+	FILE *place = fopen(".ara/place", "w");
+	char line1[10000], line2[10000]; int line = 1;
+	int number_of_lines1 = 0, number_of_lines2 = 0;
+	while(fgets(line1,10000,file1) != NULL) number_of_lines1++;
+	while(fgets(line2,10000,file2) != NULL) number_of_lines2++;
+	fseek(file1,0,SEEK_SET); fseek(file2,0,SEEK_SET);
+	while(1){
+		char *try1 = fgets(line1,10000,file1);
+		char *try2 = fgets(line2,10000,file2);
+		if(try1 == NULL && try2 == NULL) break;
+		if(try2 == NULL){
+			fprintf(place, "<<<<<<<<<<<< #%d - #%d <<<<<<<<<<<<\n", line, number_of_lines1);
+			while(fgets(line1,10000,file1) != NULL){
+				fprintf(place, "%s", line1);
+			}
+			break;
+		}
+		if(try1 == NULL){
+			fprintf(place, ">>>>>>>>>>>> #%d - #%d >>>>>>>>>>>>\n", line, number_of_lines2);
+			while(fgets(line2,10000,file2) != NULL){
+				fprintf(place, "%s", line2);
+			}
+			break;
+		}
+		if(strcmp(line1,line2)){
+			fprintf(place, "============ #%d ============\n%s%s", line, line1, line2);
+		}
+		line++;
+	}
+	fclose(file1);
+	fclose(file2);
+	fclose(place);
+	cat(".ara/place", arman);
+}
+
 int main(){
 	char COMMAND_LINE[1000];
 	char command_word[50];
@@ -1047,7 +1172,7 @@ int main(){
 				*command_line = '\0';
 			}
 		}
-		else if(!strcmp(command_word,"grep")) //function name is "replacestr"
+		else if(!strcmp(command_word,"grep"))
 		{
 			while(*command_line == ' ') command_line++;
 			sscanf(command_line, "%50s", command_word);
@@ -1103,9 +1228,54 @@ int main(){
 				printf("%s\n", "put address after --files");
 				*command_line = '\0';
 			}
-
-			
 		}
+		else if(!strcmp(command_word,"undo"))
+		{
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			if(!strcmp(command_word,"--file")){
+				corr_read(command_line);
+				command_line += the_length + 1;
+				char Address[1000];
+				strcpy(Address, corr_read_out);
+				undo(Address);
+			}
+			else{
+				printf("%s\n", "put address after --file");
+				*command_line = '\0';
+			}
+		}
+		else if(!strcmp(command_word,"auto-indent"))
+		{
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1;
+			if(!strcmp(command_word,"--file")){
+				corr_read(command_line);
+				command_line += the_length + 1;
+				char Address[1000];
+				strcpy(Address, corr_read_out);
+				auto_indent(Address);
+			}
+			else{
+				printf("%s\n", "put address after --file");
+				*command_line = '\0';
+			}
+		}
+		else if(!strcmp(command_word,"compare"))
+		{
+			char dir1[1000], dir2[1000]; int arman = 0;
+			corr_read(command_line);
+			strcpy(dir1, corr_read_out);
+			command_line += the_length + 1; while(*command_line == ' ') command_line++;
+			corr_read(command_line);
+			strcpy(dir2, corr_read_out);
+			command_line += the_length + 1; while(*command_line == ' ') command_line++;
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1; while(*command_line == ' ') command_line++;
+			if(!strcmp(command_word,"=D")) arman = 1;
+			compare(dir1, dir2, arman);
+		}
+		
 		else{
 			printf("%s : %s\n", "Invalid command", command_word);
 			*command_line = '\0';
