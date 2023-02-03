@@ -12,6 +12,7 @@
 #include<dirent.h>
 #include<locale.h> // for utf8
 
+int createfileSilent = 0;
 void createfile(char *address)
 {
 	char scope[100];
@@ -21,12 +22,14 @@ void createfile(char *address)
 			FILE *file = fopen(address, "r");
 			if(file != NULL){
 				fclose(file);
-				printf("%s exists\n", address);
+				if(!createfileSilent)
+					printf("%s exists\n", address);
 			}
 			else{
 				FILE *file = fopen(address, "w");
 				fclose(file);
 			}
+			createfileSilent = 0;
 			return;
 		}
 		else if(address[i] == '/'){
@@ -44,7 +47,7 @@ void backup(char *file_name)
 	char backup_name[100]; backup_name[0] = '\0';
 	strcat(backup_name, file_name); strcat(backup_name, ".bk");
 	backup_name[0] = '.'; backup_name[1] = 'a'; backup_name[2] = 'r'; backup_name[3] = 'a';
-	
+	createfileSilent = 1; createfile(backup_name);
 	FILE *input_file	= fopen(file_name, "r");
 	FILE *output_file	= fopen(backup_name, "w");
 	char ch;
@@ -71,16 +74,42 @@ char corr_read_out[10000]; int the_length;
 void corr_read(char *address)
 {
 	the_length = 0;
+	int dirptr = 0;
 	while(*address == ' '){address++; the_length++;}
 	if(address[0] != '"'){
-		sscanf(address, "%1000s", corr_read_out);
-		the_length = strlen(corr_read_out);
+		int slash = 0;
+		while(1){
+			if(*address == '\\'){
+				if(slash){
+					corr_read_out[dirptr] = '\\';
+					slash = 0;
+					dirptr++;
+				}
+				else slash = 1;
+			}
+			else if(*address == ' ' || *address == '\n'){
+				break;
+			}
+			else if(*address == 'n' && slash){
+				corr_read_out[dirptr] = '\n';
+				slash = 0;
+				dirptr++;
+			}
+			else{
+				corr_read_out[dirptr] = *address;
+				dirptr++;
+				slash = 0;
+			}
+			address++;
+			the_length++;
+		}
+		// sscanf(address, "%1000s", corr_read_out);
+		// the_length = strlen(corr_read_out);
 	}
 	else{
 		address++;
 		the_length++;
 		int slash = 0;
-		int dirptr = 0;
 		while(1){
 			if(*address == '\\'){
 				if(slash){
@@ -112,6 +141,7 @@ void corr_read(char *address)
 			the_length++;
 		}
 	}
+	corr_read_out[dirptr] = '\0';
 }
 
 void incorr_read(char *address)
@@ -259,6 +289,9 @@ void cat(char *file_name, int mode)
 	}
 	if(mode == 1){
 		fclose(output_file);
+	}
+	else{
+		printf("\n");
 	}
 	fclose(input_file);
 }
@@ -701,7 +734,7 @@ void auto_indent(char *file_name)
 		else if(*ch == '\n'){
 			wtbuff[0] = '\0';
 			/* eat whites */ while(1){if(fgets(ch, 2, file) == NULL) goto out; if(*ch != ' ' && *ch != '\t') break;}
-			fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t");
+			if(*ch != '}') {fprintf(place,"\n"); for(int iii = 0; iii < level; iii++) fprintf(place,"\t");}
 			fseek(file,-1,SEEK_CUR);
 		}
 		else{
@@ -792,13 +825,15 @@ int main(){
 	fgets(COMMAND_LINE, 1000, stdin);
 	command_line = (char *)&COMMAND_LINE;
 	while(1){
-		if(-1 == sscanf(command_line, "%50s", command_word)){
+		over:
+		while(*command_line == ' ' || *command_line == '\n') command_line++;
+		while(strlen(command_line) < 2){
 			fgets(COMMAND_LINE, 1000, stdin);
 			command_line = (char *)&COMMAND_LINE;
-			sscanf(command_line, "%50s", command_word);
+			while(*command_line == ' ' || *command_line == '\n') command_line++;
 		}
-		
-		command_line += strlen(command_word) + 1;
+		sscanf(command_line, "%50s", command_word);
+		command_line += strlen(command_word);
 		if(!strcmp(command_word,"exit") || !strcmp(command_word,"x"))
 		{
 			break;
@@ -828,28 +863,36 @@ int main(){
 				corr_read(command_line);
 				strcpy(dir, corr_read_out);
 				command_line += the_length + 1;
-
 				sscanf(command_line, "%50s", command_word);
-				if(!strcmp(command_word,"--str")){
-					command_line += strlen(command_word) + 1;
-					corr_read(command_line);
-					FILE *file = fopen(".ara/str","w");
-					fprintf(file, "%s", corr_read_out);
-					fclose(file);
-					command_line += the_length + 1;
-				}
-				sscanf(command_line, "%50s", command_word);
-				if(!strcmp(command_word,"--pos")){
-					command_line += strlen(command_word) + 1;
-					sscanf(command_line, "%d:%d", &line, &position);
-					char somestringhere[100];
-					sprintf(somestringhere, "%d:%d", line, position);
-					command_line += strlen(somestringhere) + 1;
-					insertstr(dir,line,position);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
 				}
 				else{
-					printf("%s\n", "put position after --pos");
-					*command_line = '\0';
+					fclose(testfile);
+					if(!strcmp(command_word,"--str")){
+						command_line += strlen(command_word) + 1;
+						corr_read(command_line);
+						FILE *file = fopen(".ara/str","w");
+						fprintf(file, "%s", corr_read_out);
+						fclose(file);
+						command_line += the_length + 1;
+					}
+					sscanf(command_line, "%50s", command_word);
+					if(!strcmp(command_word,"--pos")){
+						command_line += strlen(command_word) + 1;
+						sscanf(command_line, "%d:%d", &line, &position);
+						char somestringhere[100];
+						sprintf(somestringhere, "%d:%d", line, position);
+						command_line += strlen(somestringhere) + 1;
+						insertstr(dir,line,position);
+					}
+					else{
+						printf("%s\n", "put position after --pos");
+						*command_line = '\0';
+					}
 				}
 			}
 			else{
@@ -867,12 +910,21 @@ int main(){
 				strcpy(dir, corr_read_out);
 				command_line += the_length + 1;
 				sscanf(command_line, "%50s", command_word);
-				if(!strcmp(command_word,"=D")){
-					command_line += strlen(command_word) + 1;
-					cat(dir,1);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
 				}
 				else{
-					cat(dir,0);
+					fclose(testfile);
+					if(!strcmp(command_word,"=D")){
+						command_line += strlen(command_word) + 1;
+						cat(dir,1);
+					}
+					else{
+						cat(dir,0);
+					}
 				}
 
 			}
@@ -892,22 +944,35 @@ int main(){
 				command_line += the_length + 1;
 				sscanf(command_line, "%50s", command_word);
 				command_line += strlen(command_word) + 1;
-				if(!strcmp(command_word,"--pos")){
-					sscanf(command_line, "%d:%d", &line, &position);
-					char somestringhere[100];
-					sprintf(somestringhere, "%d:%d", line, position);
-					command_line += strlen(somestringhere) + 1;
-					sscanf(command_line, "%50s", command_word);
-					command_line += strlen(command_word) + 1;
-					if(!strcmp(command_word,"-size")){
-						sscanf(command_line, "%d", &size);
-						sprintf(somestringhere, "%d", size);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					if(!strcmp(command_word,"--pos")){
+						sscanf(command_line, "%d:%d", &line, &position);
+						char somestringhere[100];
+						sprintf(somestringhere, "%d:%d", line, position);
 						command_line += strlen(somestringhere) + 1;
-						if(-1 != sscanf(command_line, "-%c", &bfward))
-						{
-							if(bfward == 'b'|| bfward == 'f'){
-								command_line += 3;
-								removestr(dir,line,position,size,bfward);
+						sscanf(command_line, "%50s", command_word);
+						command_line += strlen(command_word) + 1;
+						if(!strcmp(command_word,"-size")){
+							sscanf(command_line, "%d", &size);
+							sprintf(somestringhere, "%d", size);
+							command_line += strlen(somestringhere) + 1;
+							if(-1 != sscanf(command_line, "-%c", &bfward))
+							{
+								if(bfward == 'b'|| bfward == 'f'){
+									command_line += 3;
+									removestr(dir,line,position,size,bfward);
+								}
+								else{
+									printf("%s\n", "sellect backward or forward using flags: -b -f");
+									*command_line = '\0';
+								}
 							}
 							else{
 								printf("%s\n", "sellect backward or forward using flags: -b -f");
@@ -915,20 +980,15 @@ int main(){
 							}
 						}
 						else{
-							printf("%s\n", "sellect backward or forward using flags: -b -f");
+							printf("%s\n", "put size after -size");
 							*command_line = '\0';
 						}
 					}
 					else{
-						printf("%s\n", "put size after -size");
+						printf("%s\n", "put position after --pos");
 						*command_line = '\0';
 					}
 				}
-				else{
-					printf("%s\n", "put position after --pos");
-					*command_line = '\0';
-				}
-
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -946,22 +1006,35 @@ int main(){
 				command_line += the_length + 1;
 				sscanf(command_line, "%50s", command_word);
 				command_line += strlen(command_word) + 1;
-				if(!strcmp(command_word,"--pos")){
-					sscanf(command_line, "%d:%d", &line, &position);
-					char somestringhere[100];
-					sprintf(somestringhere, "%d:%d", line, position);
-					command_line += strlen(somestringhere) + 1;
-					sscanf(command_line, "%50s", command_word);
-					command_line += strlen(command_word) + 1;
-					if(!strcmp(command_word,"-size")){
-						sscanf(command_line, "%d", &size);
-						sprintf(somestringhere, "%d", size);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					if(!strcmp(command_word,"--pos")){
+						sscanf(command_line, "%d:%d", &line, &position);
+						char somestringhere[100];
+						sprintf(somestringhere, "%d:%d", line, position);
 						command_line += strlen(somestringhere) + 1;
-						if(-1 != sscanf(command_line, "-%c", &bfward))
-						{
-							if(bfward == 'b'|| bfward == 'f'){
-								command_line += 3;
-								copystr(dir,line,position,size,bfward);
+						sscanf(command_line, "%50s", command_word);
+						command_line += strlen(command_word) + 1;
+						if(!strcmp(command_word,"-size")){
+							sscanf(command_line, "%d", &size);
+							sprintf(somestringhere, "%d", size);
+							command_line += strlen(somestringhere) + 1;
+							if(-1 != sscanf(command_line, "-%c", &bfward))
+							{
+								if(bfward == 'b'|| bfward == 'f'){
+									command_line += 3;
+									copystr(dir,line,position,size,bfward);
+								}
+								else{
+									printf("%s\n", "sellect backward or forward using flags: -b -f");
+									*command_line = '\0';
+								}
 							}
 							else{
 								printf("%s\n", "sellect backward or forward using flags: -b -f");
@@ -969,20 +1042,15 @@ int main(){
 							}
 						}
 						else{
-							printf("%s\n", "sellect backward or forward using flags: -b -f");
+							printf("%s\n", "put size after -size");
 							*command_line = '\0';
 						}
 					}
 					else{
-						printf("%s\n", "put size after -size");
+						printf("%s\n", "put position after --pos");
 						*command_line = '\0';
 					}
 				}
-				else{
-					printf("%s\n", "put position after --pos");
-					*command_line = '\0';
-				}
-
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -1000,23 +1068,36 @@ int main(){
 				command_line += the_length + 1;
 				sscanf(command_line, "%50s", command_word);
 				command_line += strlen(command_word) + 1;
-				if(!strcmp(command_word,"--pos")){
-					sscanf(command_line, "%d:%d", &line, &position);
-					char somestringhere[100];
-					sprintf(somestringhere, "%d:%d", line, position);
-					command_line += strlen(somestringhere) + 1;
-					sscanf(command_line, "%50s", command_word);
-					command_line += strlen(command_word) + 1;
-					if(!strcmp(command_word,"-size")){
-						sscanf(command_line, "%d", &size);
-						sprintf(somestringhere, "%d", size);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					if(!strcmp(command_word,"--pos")){
+						sscanf(command_line, "%d:%d", &line, &position);
+						char somestringhere[100];
+						sprintf(somestringhere, "%d:%d", line, position);
 						command_line += strlen(somestringhere) + 1;
-						if(-1 != sscanf(command_line, "-%c", &bfward))
-						{
-							if(bfward == 'b'|| bfward == 'f'){
-								command_line += 3;
-								copystr(dir,line,position,size,bfward);
-								removestr(dir,line,position,size,bfward);
+						sscanf(command_line, "%50s", command_word);
+						command_line += strlen(command_word) + 1;
+						if(!strcmp(command_word,"-size")){
+							sscanf(command_line, "%d", &size);
+							sprintf(somestringhere, "%d", size);
+							command_line += strlen(somestringhere) + 1;
+							if(-1 != sscanf(command_line, "-%c", &bfward))
+							{
+								if(bfward == 'b'|| bfward == 'f'){
+									command_line += 3;
+									copystr(dir,line,position,size,bfward);
+									removestr(dir,line,position,size,bfward);
+								}
+								else{
+									printf("%s\n", "sellect backward or forward using flags: -b -f");
+									*command_line = '\0';
+								}
 							}
 							else{
 								printf("%s\n", "sellect backward or forward using flags: -b -f");
@@ -1024,20 +1105,15 @@ int main(){
 							}
 						}
 						else{
-							printf("%s\n", "sellect backward or forward using flags: -b -f");
+							printf("%s\n", "put size after -size");
 							*command_line = '\0';
 						}
 					}
 					else{
-						printf("%s\n", "put size after -size");
+						printf("%s\n", "put position after --pos");
 						*command_line = '\0';
 					}
 				}
-				else{
-					printf("%s\n", "put position after --pos");
-					*command_line = '\0';
-				}
-
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -1053,19 +1129,27 @@ int main(){
 				corr_read(command_line);
 				strcpy(dir, corr_read_out);
 				command_line += the_length + 1;
-
-				sscanf(command_line, "%50s", command_word);
-				if(!strcmp(command_word,"--pos")){
-					command_line += strlen(command_word) + 1;
-					sscanf(command_line, "%d:%d", &line, &position);
-					char somestringhere[100];
-					sprintf(somestringhere, "%d:%d", line, position);
-					command_line += strlen(somestringhere) + 1;
-					pastestr(dir,line,position);
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
+					*command_line = '\0';
 				}
 				else{
-					printf("%s\n", "put position after --pos");
-					*command_line = '\0';
+					fclose(testfile);
+					sscanf(command_line, "%50s", command_word);
+					if(!strcmp(command_word,"--pos")){
+						command_line += strlen(command_word) + 1;
+						sscanf(command_line, "%d:%d", &line, &position);
+						char somestringhere[100];
+						sprintf(somestringhere, "%d:%d", line, position);
+						command_line += strlen(somestringhere) + 1;
+						pastestr(dir,line,position);
+					}
+					else{
+						printf("%s\n", "put position after --pos");
+						*command_line = '\0';
+					}
 				}
 			}
 			else{
@@ -1093,39 +1177,48 @@ int main(){
 				corr_read(command_line);
 				strcpy(dir, corr_read_out);
 				command_line += the_length + 1; if(*command_line == ' ') command_line++;
-				while(1){
-					int theOut = sscanf(command_line, "%50s", command_word);
-					if(theOut == -1) break;
-					command_line += strlen(command_word); if(*command_line == ' ') command_line++;
-					if(!strcmp(command_word,"-count")){
-						atr_count = 1;
-					}
-					else if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
-						atr_at = 1;
-						sscanf(command_word,"-at%d",&at_num);
-						if(*command_line == ' ') command_line++;
-					}
-					else if(!strcmp(command_word,"-byword")){
-						atr_byword = 1;
-					}
-					else if(!strcmp(command_word,"-all")){
-						atr_all = 1;
-					}
-					else if(!strcmp(command_word,"=D")){
-						arman = 1;
-						break;
-					}
-					else break;
-				}
-				if(atr_all + atr_at + atr_count > 1){
-					printf("you can use at most one of -count , -at or -all\n");
+				////
+				FILE *testfile = fopen(dir, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir);
 					*command_line = '\0';
 				}
 				else{
-					enum FinderType findertype = ATR_AT;
-					if(atr_count) findertype = ATR_COUNT;
-					else if(atr_all) findertype = ATR_ALL;
-					findstr(dir,findertype,at_num,atr_byword,arman);
+					fclose(testfile);
+					while(1){
+						int theOut = sscanf(command_line, "%50s", command_word);
+						if(theOut == -1) break;
+						command_line += strlen(command_word); if(*command_line == ' ') command_line++;
+						if(!strcmp(command_word,"-count")){
+							atr_count = 1;
+						}
+						else if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
+							atr_at = 1;
+							sscanf(command_word,"-at%d",&at_num);
+							if(*command_line == ' ') command_line++;
+						}
+						else if(!strcmp(command_word,"-byword")){
+							atr_byword = 1;
+						}
+						else if(!strcmp(command_word,"-all")){
+							atr_all = 1;
+						}
+						else if(!strcmp(command_word,"=D")){
+							arman = 1;
+							break;
+						}
+						else break;
+					}
+					if(atr_all + atr_at + atr_count > 1){
+						printf("you can use at most one of -count , -at or -all\n");
+						*command_line = '\0';
+					}
+					else{
+						enum FinderType findertype = ATR_AT;
+						if(atr_count) findertype = ATR_COUNT;
+						else if(atr_all) findertype = ATR_ALL;
+						findstr(dir,findertype,at_num,atr_byword,arman);
+					}
 				}
 			}
 			else{
@@ -1163,29 +1256,38 @@ int main(){
 					corr_read(command_line);
 					strcpy(dir, corr_read_out);
 					command_line += the_length + 1; if(*command_line == ' ') command_line++;
-					while(1){
-						int theOut = sscanf(command_line, "%50s", command_word);
-						if(theOut == -1) break;
-						command_line += strlen(command_word); if(*command_line == ' ') command_line++;
-						if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
-							atr_at = 1;
-							sscanf(command_word,"-at%d",&at_num);
-							if(*command_line == ' ') command_line++;
-						}
-
-						else if(!strcmp(command_word,"-all")){
-							atr_all = 1;
-						}
-						else break;
-					}
-					if(atr_all + atr_at > 1){
-						printf("you can use at most one of -at or -all\n");
+					////
+					FILE *testfile = fopen(dir, "r");
+					if(testfile == NULL){
+						printf("%s : there is no such file \n", dir);
 						*command_line = '\0';
 					}
 					else{
-						enum FinderType findertype = ATR_AT;
-						if(atr_all) findertype = ATR_ALL;
-						replacestr(dir, str2, findertype, at_num);
+						fclose(testfile);
+						while(1){
+							int theOut = sscanf(command_line, "%50s", command_word);
+							if(theOut == -1) break;
+							command_line += strlen(command_word); if(*command_line == ' ') command_line++;
+							if(command_word[0]=='-' && command_word[1]=='a' && command_word[2]=='t'){
+								atr_at = 1;
+								sscanf(command_word,"-at%d",&at_num);
+								if(*command_line == ' ') command_line++;
+							}
+
+							else if(!strcmp(command_word,"-all")){
+								atr_all = 1;
+							}
+							else break;
+						}
+						if(atr_all + atr_at > 1){
+							printf("you can use at most one of -at or -all\n");
+							*command_line = '\0';
+						}
+						else{
+							enum FinderType findertype = ATR_AT;
+							if(atr_all) findertype = ATR_ALL;
+							replacestr(dir, str2, findertype, at_num);
+						}
 					}
 				}
 				else{
@@ -1247,6 +1349,16 @@ int main(){
 					else{
 						strcpy(dir[file_counter], corr_read_out);
 						file_counter++;
+						////
+						FILE *testfile = fopen(dir[file_counter], "r");
+						if(testfile == NULL){
+							printf("%s : there is no such file \n", dir[file_counter]);
+							*command_line = '\0';
+							goto over;
+						}
+						else{
+							fclose(testfile);
+						}
 					}
 				}
 				grep(dir, file_counter, cOption, lOption, arman);
@@ -1265,7 +1377,16 @@ int main(){
 				command_line += the_length + 1;
 				char Address[1000];
 				strcpy(Address, corr_read_out);
-				undo(Address);
+				////
+				FILE *testfile = fopen(Address, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", Address);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					undo(Address);
+				}
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -1281,7 +1402,16 @@ int main(){
 				command_line += the_length + 1;
 				char Address[1000];
 				strcpy(Address, corr_read_out);
-				auto_indent(Address);
+				////
+				FILE *testfile = fopen(Address, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", Address);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					auto_indent(Address);
+				}
 			}
 			else{
 				printf("%s\n", "put address after --file");
@@ -1300,7 +1430,25 @@ int main(){
 			sscanf(command_line, "%50s", command_word);
 			command_line += strlen(command_word) + 1; while(*command_line == ' ') command_line++;
 			if(!strcmp(command_word,"=D")) arman = 1;
-			compare(dir1, dir2, arman);
+			////
+			FILE *testfile = fopen(dir1, "r");
+			if(testfile == NULL){
+				printf("%s : there is no such file \n", dir1);
+				*command_line = '\0';
+			}
+			else{
+				fclose(testfile);
+				////
+				FILE *testfile = fopen(dir2, "r");
+				if(testfile == NULL){
+					printf("%s : there is no such file \n", dir2);
+					*command_line = '\0';
+				}
+				else{
+					fclose(testfile);
+					compare(dir1, dir2, arman);
+				}
+			}
 		}
 		else if(!strcmp(command_word,"tree"))
 		{
@@ -1309,9 +1457,11 @@ int main(){
 			sscanf(command_line,"%d", &depth);
 			char somestringhere[100]; sprintf(somestringhere, "%d", depth); command_line += strlen(somestringhere);
 			while(*command_line == ' ') command_line++;
-			sscanf(command_line, "%50s", command_word);
-			command_line += strlen(command_word) + 1; while(*command_line == ' ') command_line++;
-			if(!strcmp(command_word,"=D")) arman = 1;
+			int yes = sscanf(command_line, "%50s", command_word);
+			if(yes != -1){
+				command_line += strlen(command_word); while(*command_line == ' ' || *command_line == '\n') command_line++;
+				if(!strcmp(command_word,"=D")) arman = 1;
+			}
 			tree("root",0,depth,arman);
 		}
 		else{
