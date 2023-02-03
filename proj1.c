@@ -9,7 +9,8 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<unistd.h>
-
+#include<dirent.h>
+#include<locale.h> // for utf8
 
 void createfile(char *address)
 {
@@ -758,6 +759,32 @@ void compare(char *file_1, char *file_2, int arman)
 	cat(".ara/place", arman);
 }
 
+void tree_help(char *theAdd, int level, int maxlevel, FILE *place)
+{
+	if(level == maxlevel) return;
+	char add[1000];
+	struct dirent *ldir;
+	DIR *dir = opendir(theAdd);
+	if(!dir) return;
+	while((ldir=readdir(dir)) != NULL)
+	{
+		if(ldir->d_name[0] == '.') continue;
+		for(int i = 0; i < level; i++) fprintf(place, "│   ");
+		fprintf(place, "├── %s\n", ldir->d_name);
+		strcpy(add, theAdd);
+		strcat(add, "/");
+		strcat(add, ldir->d_name);
+		tree_help(add, level+1, maxlevel, place);
+	}
+}
+void tree(char *theAdd, int level, int maxlevel, int arman)
+{
+	FILE *place = fopen(".ara/place","w");
+	tree_help(theAdd, level, maxlevel, place);
+	fclose(place);
+	cat(".ara/place", arman);
+}
+
 int main(){
 	char COMMAND_LINE[1000];
 	char command_word[50];
@@ -1275,7 +1302,18 @@ int main(){
 			if(!strcmp(command_word,"=D")) arman = 1;
 			compare(dir1, dir2, arman);
 		}
-		
+		else if(!strcmp(command_word,"tree"))
+		{
+			while(*command_line == ' ') command_line++;
+			int depth, arman = 0;
+			sscanf(command_line,"%d", &depth);
+			char somestringhere[100]; sprintf(somestringhere, "%d", depth); command_line += strlen(somestringhere);
+			while(*command_line == ' ') command_line++;
+			sscanf(command_line, "%50s", command_word);
+			command_line += strlen(command_word) + 1; while(*command_line == ' ') command_line++;
+			if(!strcmp(command_word,"=D")) arman = 1;
+			tree("root",0,depth,arman);
+		}
 		else{
 			printf("%s : %s\n", "Invalid command", command_word);
 			*command_line = '\0';
